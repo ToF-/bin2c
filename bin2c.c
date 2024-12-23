@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <getopt.h>
 #define MAXNAME 255
@@ -7,7 +8,7 @@
 
 unsigned char buffer[MAXBUFFER];
 
-int process(char *binary_filename, char *output_filename) {
+int process(char *binary_filename, char *output_filename, uint16_t start_address) {
     int size;
     FILE *binary_file;
     if ((binary_file = fopen(binary_filename, "rb"))) {
@@ -18,8 +19,9 @@ int process(char *binary_filename, char *output_filename) {
             fprintf(output_file, "uint8_t binary[BINARY_SIZE] = {\n");
             int index;
             for(index = 0; index < size; index++) {
-                if (index % 16 == 0 && index > 0) {
+                if (index % 16 == 0) {
                     fprintf(output_file, "\n");
+                    fprintf(output_file, "/* 0x%04X */ ", start_address+index);
                 }
                 fprintf(output_file, " 0x%02X", buffer[index]);
                 if ((index+1) < size) {
@@ -50,9 +52,18 @@ int main(int argc, char *argv[]) {
     };
     int loaded = 0;
     char name[MAXNAME];
+    uint16_t start_address = 0x0000;
     strcpy(name, DEFAULT_NAME);
-    while ((opt = getopt_long(argc, argv, "ho:", long_options, NULL)) != -1) {
+    while ((opt = getopt_long(argc, argv, "ho:a:", long_options, NULL)) != -1) {
         switch (opt) {
+            case 'a':
+                {
+                    if(!sscanf(optarg,"%4hx", &start_address)) {
+                        fprintf(stderr, "incorrect start address: %s\n", optarg);
+                        exit(1);
+                    }
+                }
+                break;
             case 'h':
                 printf("Usage: bin2c myfile.bin [-o|--output name.h]\n");
                 printf("   will generate name.h declaring an array of bytes in myfile.bin\n");
@@ -63,7 +74,7 @@ int main(int argc, char *argv[]) {
         }
     }
     if (optind < argc) {
-        if ((loaded = process(argv[optind], name)) == 0) {
+        if ((loaded = process(argv[optind], name, start_address)) == 0) {
             return 1;
         }
     } else {
